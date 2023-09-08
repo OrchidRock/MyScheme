@@ -12,7 +12,7 @@ An experimental Scheme compiler implemented  using C++.
 
 ## Example
 
-"""shell
+```shell
 > Welcome to MyScheme. Use Ctrl-C to exit.
 > 123
 123
@@ -37,4 +37,4 @@ abc
 > (1 (2 3))
 (1 2 3)
 
-"""
+```
