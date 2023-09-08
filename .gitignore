@@ -1,3 +1,6 @@
+# backup
+*.swp
+
 # Prerequisites
 *.d
 
