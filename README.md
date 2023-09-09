@@ -10,7 +10,7 @@ An experimental Scheme compiler implemented  using C++.
 
 `$ ./MyScheme`
 
-## Example
+## Simple Example
 
 ```shell
 > Welcome to MyScheme. Use Ctrl-C to exit.
@@ -38,3 +38,5 @@ abc
 (1 2 3)
 
 ```
+
+

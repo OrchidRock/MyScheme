@@ -2,9 +2,9 @@
 #include <string>
 #include <iostream>
 #include <cstdio>
-#include "../include/object.h"
-#include "../include/env.h"
-#include "../include/primitive_proc.h"
+#include "object.h"
+#include "env.h"
+#include "procedure.h"
 
 using namespace MyScheme;
 
@@ -13,10 +13,11 @@ symbol* quote_symbol;
 symbol* define_symbol;
 symbol* set_symbol;
 symbol* if_symbol;
+symbol* lambda_symbol;
 std::unordered_map<std::string, symbol*> symbol_table;
 pair* the_global_environment;
 
-symbol* make_symbol(char* buffer);
+symbol* make_symbol(std::string buffer);
 Object* eval(Object* exp, pair* env);
 
 void setup_environment() {
@@ -76,17 +77,17 @@ char is_true(Object* obj) {
 #define cdddar(obj) cdr(cdr(cdr(car(obj))))
 #define cddddr(obj) cdr(cdr(cdr(cdr(obj))))
 */
-symbol* make_symbol(char* buffer) {
-    std::string key = buffer;
+symbol* make_symbol(std::string buffer) {
     std::unordered_map<std::string, symbol*>::iterator iter;
-    iter = symbol_table.find(key);
+    iter = symbol_table.find(buffer);
     if (iter != symbol_table.end()) {
         return iter->second;        
     }
     symbol* new_symbol = new symbol(buffer);
-    symbol_table[key] = new_symbol;
+    symbol_table[buffer] = new_symbol;
     return new_symbol; 
 }
+
 
 char is_delimiter(int c) {
     return isspace(c) || c == EOF ||
@@ -123,16 +124,15 @@ void eat_whitespace(FILE *in) {
     }
 }
 
-void eat_expected_string(FILE *in, char *str) {
+void eat_expected_string(FILE *in, std::string str) {
     int c;
 
-    while (*str != '\0') {
+    for(int i = 0; i < str.size(); i++) {
         c = getc(in);
-        if (c != *str) {
+        if (c != str[i]) {
             fprintf(stderr, "unexpected character '%c'\n", c);
             exit(1);
         }
-        str++;
     }
 }
 
@@ -369,10 +369,49 @@ bool is_definition(Object* exp) {
     return is_tagged_list(exp, define_symbol);
 }
 Object* definition_variable(Object* exp) {
+    Object* cadr = ((pair*)(((pair*)exp)->cdr()))->car();
+    if (cadr->type == ObjectType::SYMBOL) {
+        return cadr;
+    }else{ // pair
+        return ((pair*)cadr)->car();
+    }
+}
+
+Object* make_lambda(Object*, Object*);
+
+Object* definition_value(Object* exp) {
+    Object* cddr = ((pair*)(((pair*)exp)->cdr()))->cdr();
+    Object* cadr = ((pair*)(((pair*)exp)->cdr()))->car();
+    if (cadr->type == ObjectType::SYMBOL) {
+        return ((pair*)cddr)->car();
+    }else {
+        return make_lambda(((pair*)cadr)->cdr(), cddr);
+    }
+}
+
+Object* make_lambda(Object* parameters, Object* body) {
+    return cons(lambda_symbol, cons(parameters, body));
+}
+
+bool is_lambda(Object* exp) {
+    return is_tagged_list(exp, lambda_symbol);
+}
+
+Object* lambda_parameters(Object* exp) {
     return ((pair*)(((pair*)exp)->cdr()))->car();
 }
-Object* definition_value(Object* exp) {
-    return ((pair*)(((pair*)(((pair*)exp)->cdr()))->cdr()))->car();
+Object* lambda_body(Object* exp) {
+    return ((pair*)(((pair*)exp)->cdr()))->cdr();
+}
+
+bool is_last_exp(Object* seq) {
+    return ((pair*)seq)->cdr()->type == ObjectType::THE_EMPTY_LIST;
+}
+Object* first_exp(Object* seq) {
+    return ((pair*)seq)->car();
+}
+Object* rest_exps(Object* seq) {
+    return ((pair*)seq)->cdr();
 }
 
 bool is_if(Object* exp) {
@@ -464,12 +503,29 @@ tailcall:
                 if_alternative(exp);
         goto tailcall;
     }
+    else if (is_lambda(exp)) {
+        return new compound_proc(lambda_parameters(exp),
+                                 lambda_body(exp),
+                                 env);
+    }
     else if (is_application(exp)) {
         procedure = eval(proc_operator(exp), env);
         arguments = list_of_values(proc_operands(exp), env);
-        if (procedure->type != ObjectType::PRIMITIVE_PROC)
+        if (procedure->type == ObjectType::PRIMITIVE_PROC){
+            return ((Procedure*)procedure)->proc(arguments);
+        }else if(procedure->type == ObjectType::COMPOUND_PROC) {
+            compound_proc* cp = (compound_proc*)procedure;
+            env = extend_environment(new Frame(cp->parameters, arguments), cp->env);
+            exp = cp->body;
+            while(!is_last_exp(exp)) {
+                eval(first_exp(exp), env);
+                exp = rest_exps(exp);
+            }
+            exp = first_exp(exp);
+            goto tailcall;
+        }else {
             return exp;
-        return ((Procedure*)procedure)->proc(arguments);
+        }
     }
     else {
         fprintf(stderr, "cannot eval unknown expression type\n");
@@ -496,6 +552,7 @@ void init() {
     set_symbol = make_symbol("set!");
     ok_symbol = make_symbol("ok");
     if_symbol = make_symbol("if");    
+    lambda_symbol = make_symbol("lambda");
 
     setup_environment();
 #define add_procedure(scheme_name, obj)         \

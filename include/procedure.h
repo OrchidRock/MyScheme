@@ -1,8 +1,8 @@
-#ifndef __PRIMITIVE_H__
-#define __PRIMITIVE_H__
+#ifndef __PROCEDURE_H__
+#define __PROCEDURE_H__
 #include <cstdio>
 #include <cstdlib>
-#include "../include/object.h"
+#include "object.h"
 
 namespace  MyScheme {
 class Procedure : public Object {
@@ -16,6 +16,24 @@ public:
     void print() override {
         printf("#<procedure>"); 
     }
+};
+
+class compound_proc : public Procedure {
+public:
+    Object* parameters;
+    Object* body;
+    pair* env;
+    
+    compound_proc(Object* paras, Object* body, pair* env,
+                    ObjectType type = ObjectType::COMPOUND_PROC) {
+        this->type = type;
+        this->parameters = paras;
+        this->body = body;
+        this->env = env;
+    }
+    Object* proc(Object* args) {
+        return args;
+    } 
 };
 
 class primitive_proc_add : public Procedure {
@@ -303,7 +321,9 @@ public:
 class primitive_proc_is_proc : public Procedure {
 public:
     Object* proc(Object* args) {
-        return (((pair*)args)->car()->type == ObjectType::PRIMITIVE_PROC) ? True : False;
+        ObjectType type = ((pair*)args)->car()->type;
+        return (type == ObjectType::PRIMITIVE_PROC || type == ObjectType::COMPOUND_PROC) 
+                ? True : False;
     }
 };
 class primitive_proc_char_to_int : public Procedure {
@@ -355,4 +375,4 @@ public:
 
 }
 
-#endif // __PRIMITIVE_H__
+#endif // __PROCEDURE_H__

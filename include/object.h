@@ -9,7 +9,8 @@ namespace MyScheme {
 
 enum class ObjectType {
     THE_EMPTY_LIST, BOOLEAN, FIXNUM, 
-    STRING, CHARACTER, PAIR, SYMBOL, PRIMITIVE_PROC
+    STRING, CHARACTER, PAIR, SYMBOL, 
+    PRIMITIVE_PROC, COMPOUND_PROC
 };
 
 class Object {
@@ -99,7 +100,7 @@ public:
 class symbol: public Object {
 public:
     std::string value;
-    symbol(char* val, ObjectType type = ObjectType::SYMBOL){
+    symbol(std::string val, ObjectType type = ObjectType::SYMBOL){
         this->type = type;
         this->value = val;
     }

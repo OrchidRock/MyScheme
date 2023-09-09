@@ -1,6 +1,6 @@
 #include <cstdio>
-#include "../include/env.h"
-#include "../include/object.h"
+#include "env.h"
+#include "object.h"
 
 using namespace MyScheme;
 
