@@ -1,15 +1,28 @@
-#include <map>
+#include <unordered_map>
 #include <string>
 #include <iostream>
 #include <cstdio>
 #include "../include/object.h"
+#include "../include/env.h"
 
 using namespace MyScheme;
 
 boolean* True;
 boolean* False;
 pair* the_empty_list;
-std::map<std::string, symbol*> symbol_table;
+symbol* quote_symbol;
+symbol* define_symbol;
+symbol* set_symbol;
+symbol* ok_symbol;
+std::unordered_map<std::string, symbol*> symbol_table;
+pair* the_global_environment;
+
+symbol* make_symbol(char* buffer);
+
+void setup_environment() {
+    the_global_environment = the_empty_list;
+    the_global_environment = extend_environment(new Frame(), the_global_environment);
+}
 
 void init() {
     True = new boolean();
@@ -21,6 +34,13 @@ void init() {
     
     the_empty_list = new pair(nullptr, nullptr);
     the_empty_list->type = ObjectType::THE_EMPTY_LIST;
+    
+    quote_symbol = make_symbol("quote");
+    define_symbol = make_symbol("define");
+    set_symbol = make_symbol("set!");
+    ok_symbol = make_symbol("ok");
+    
+    setup_environment();
 }
 
 void destory() {
@@ -38,25 +58,39 @@ char is_pair(Object *obj) {
     return obj->type == ObjectType::PAIR;
 }
 
-Object *car(pair *p) {
-    return p->car;
-}
-
-void set_car(pair *obj, Object* value) {
-    obj->car = value;
-}
-
-Object *cdr(pair *p) {
-    return p->cdr;
-}
-
-void set_cdr(pair *obj, Object* value) {
-    obj->cdr = value;
-}
-
+/*
+#define caar(obj)   car(car(obj))
+#define cadr(obj)   car(cdr(obj))
+#define cdar(obj)   cdr(car(obj))
+#define cddr(obj)   cdr(cdr(obj))
+#define caaar(obj)  car(car(car(obj)))
+#define caadr(obj)  car(car(cdr(obj)))
+#define cadar(obj)  car(cdr(car(obj)))
+#define caddr(obj)  car(cdr(cdr(obj)))
+#define cdaar(obj)  cdr(car(car(obj)))
+#define cdadr(obj)  cdr(car(cdr(obj)))
+#define cddar(obj)  cdr(cdr(car(obj)))
+#define cdddr(obj)  cdr(cdr(cdr(obj)))
+#define caaaar(obj) car(car(car(car(obj))))
+#define caaadr(obj) car(car(car(cdr(obj))))
+#define caadar(obj) car(car(cdr(car(obj))))
+#define caaddr(obj) car(car(cdr(cdr(obj))))
+#define cadaar(obj) car(cdr(car(car(obj))))
+#define cadadr(obj) car(cdr(car(cdr(obj))))
+#define caddar(obj) car(cdr(cdr(car(obj))))
+#define cadddr(obj) car(cdr(cdr(cdr(obj))))
+#define cdaaar(obj) cdr(car(car(car(obj))))
+#define cdaadr(obj) cdr(car(car(cdr(obj))))
+#define cdadar(obj) cdr(car(cdr(car(obj))))
+#define cdaddr(obj) cdr(car(cdr(cdr(obj))))
+#define cddaar(obj) cdr(cdr(car(car(obj))))
+#define cddadr(obj) cdr(cdr(car(cdr(obj))))
+#define cdddar(obj) cdr(cdr(cdr(car(obj))))
+#define cddddr(obj) cdr(cdr(cdr(cdr(obj))))
+*/
 symbol* make_symbol(char* buffer) {
     std::string key = buffer;
-    std::map<std::string, symbol*>::iterator iter;
+    std::unordered_map<std::string, symbol*>::iterator iter;
     iter = symbol_table.find(key);
     if (iter != symbol_table.end()) {
         return iter->second;        
@@ -293,8 +327,11 @@ Object *read(FILE *in) {
         buffer[i] = '\0';
         return new string(buffer);
     }
-    else if (c == '(') { /* read the empty list or pair */
+    else if (c == '(') { /* read the empty list or pair. */
         return read_pair(in);
+    }
+    else if (c == '\'') { /* read quoted expression. */
+        return cons(quote_symbol, cons(read(in), the_empty_list));
     }
     else {
         fprintf(stderr, "bad input. Unexpected '%c'\n", c);
@@ -304,13 +341,105 @@ Object *read(FILE *in) {
     exit(1);
 }
 
+/* ############################# EVAL ###################### */
+bool is_self_evaluating(Object* exp) {
+    return exp->type == ObjectType::BOOLEAN ||
+            exp->type == ObjectType::CHARACTER || 
+            exp->type == ObjectType::FIXNUM ||
+            exp->type == ObjectType::STRING;
+}
+bool is_variable(Object* exp) {
+    return exp->type == ObjectType::SYMBOL;
+}
+bool is_tagged_list(Object* exp, symbol* tag) {
+    Object* the_car;
+    if (exp->type == ObjectType::PAIR) {
+        the_car = ((pair*)exp)->car();
+        return the_car->type == ObjectType::SYMBOL && 
+                ((symbol*)the_car) == tag;
+    }
+    return false;
+}
+
+bool is_quoted(Object* exp) {
+    return is_tagged_list(exp, quote_symbol);
+}
+
+Object* text_of_quotation(Object* exp) {
+    return ((pair*)(((pair*)exp)->cdr()))->car();
+}
+bool is_assignment(Object* exp) {
+    return is_tagged_list(exp, set_symbol);
+}
+Object* assignment_variable(Object* exp) {
+    return ((pair*)(((pair*)exp)->cdr()))->car();
+}
+Object* assignment_value(Object* exp) {
+    return ((pair*)(((pair*)(((pair*)exp)->cdr()))->cdr()))->car();
+}
+bool is_definition(Object* exp) {
+    return is_tagged_list(exp, define_symbol);
+}
+Object* definition_variable(Object* exp) {
+    return ((pair*)(((pair*)exp)->cdr()))->car();
+}
+Object* definition_value(Object* exp) {
+    return ((pair*)(((pair*)(((pair*)exp)->cdr()))->cdr()))->car();
+}
+
+
+Object* eval(Object* exp, pair* env);
+
+Object* eval_assignment(Object* exp, pair* env) {
+    if(!set_variable_value((symbol*)assignment_variable(exp),
+                        eval(assignment_value(exp), env), env)) {
+        fprintf(stderr, "unbound variable\n");
+        exit(1);
+    }
+    return ok_symbol;
+}
+
+void define_variable(symbol* var, Object* val, pair* env) {
+    Frame* f = first_frame(env);
+    f->add_binding(var, val);
+}
+
+Object* eval_definition(Object* exp, pair* env) {
+    define_variable((symbol*)definition_variable(exp),
+                    eval(definition_value(exp), env), env);
+    return ok_symbol; 
+}
+
+Object* eval(Object* exp, pair* env) {
+    if (is_self_evaluating(exp))
+        return exp;
+    else if (is_variable(exp)) {
+        Object* obj = lookup_variable_value(static_cast<symbol*>(exp), env);
+        if (obj == nullptr) {
+            fprintf(stderr, "Unbounded variable\n");
+            exit(1);
+        }else
+            return obj;
+    }
+    else if (is_quoted(exp))
+        return text_of_quotation(exp);
+    else if (is_assignment(exp)) {
+        return eval_assignment(exp, env);        
+    }
+    else if (is_definition(exp)) {
+        return eval_definition(exp, env);        
+    }
+    else {
+        fprintf(stderr, "cannot eval unknown expression type\n");
+        exit(1);
+    }
+    fprintf(stderr, "eval illegal state\n");
+    exit(1);
+}
+
 void write(Object *obj) {
     if (obj == nullptr) return;
     obj->print();    
-}
-
-Object* eval(Object* exp) {
-    return exp;
 }
 
 int main(int argc, char *argv[])
@@ -321,7 +450,7 @@ int main(int argc, char *argv[])
 
     while  (true) {
         std::cout << "> ";
-        write(eval(read(stdin)));
+        write(eval(read(stdin), the_global_environment));
         std::cout << "\n";
     }
 
