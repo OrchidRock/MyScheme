@@ -4,44 +4,26 @@
 #include <cstdio>
 #include "../include/object.h"
 #include "../include/env.h"
+#include "../include/primitive_proc.h"
 
 using namespace MyScheme;
 
-boolean* True;
-boolean* False;
 pair* the_empty_list;
 symbol* quote_symbol;
 symbol* define_symbol;
 symbol* set_symbol;
-symbol* ok_symbol;
+symbol* if_symbol;
 std::unordered_map<std::string, symbol*> symbol_table;
 pair* the_global_environment;
 
 symbol* make_symbol(char* buffer);
+Object* eval(Object* exp, pair* env);
 
 void setup_environment() {
     the_global_environment = the_empty_list;
     the_global_environment = extend_environment(new Frame(), the_global_environment);
 }
 
-void init() {
-    True = new boolean();
-    False = new boolean();
-    True->type = ObjectType::BOOLEAN;
-    False->type = ObjectType::BOOLEAN;
-    True->value = 1;
-    False->value = 0;
-    
-    the_empty_list = new pair(nullptr, nullptr);
-    the_empty_list->type = ObjectType::THE_EMPTY_LIST;
-    
-    quote_symbol = make_symbol("quote");
-    define_symbol = make_symbol("define");
-    set_symbol = make_symbol("set!");
-    ok_symbol = make_symbol("ok");
-    
-    setup_environment();
-}
 
 void destory() {
     delete True;
@@ -56,6 +38,12 @@ Object *cons(Object *car, Object *cdr) {
 
 char is_pair(Object *obj) {
     return obj->type == ObjectType::PAIR;
+}
+char is_false(Object* obj) {
+    return obj == False;
+}
+char is_true(Object* obj) {
+    return !is_false(obj);
 }
 
 /*
@@ -387,8 +375,46 @@ Object* definition_value(Object* exp) {
     return ((pair*)(((pair*)(((pair*)exp)->cdr()))->cdr()))->car();
 }
 
+bool is_if(Object* exp) {
+    return is_tagged_list(exp, if_symbol);
+}
+Object* if_predicate(Object* exp) {
+    return ((pair*)(((pair*)exp)->cdr()))->car();
+}
+Object* if_consequent(Object* exp) {
+    return ((pair*)(((pair*)(((pair*)exp)->cdr()))->cdr()))->car();
+}
+Object* if_alternative(Object* exp) {
+    Object* obj = ((pair*)(((pair*)(((pair*)exp)->cdr()))->cdr()))->cdr();
+    if (obj->type == ObjectType::THE_EMPTY_LIST) return False;
+    return ((pair*)obj)->car();
+}
 
-Object* eval(Object* exp, pair* env);
+char is_application(Object* exp) {
+    return is_pair(exp);
+}
+Object* proc_operator(Object* exp) {
+    return ((pair*)exp)->car();
+}
+Object* proc_operands(Object* exp) {
+    return ((pair*)exp)->cdr();
+}
+Object* first_operands(Object* ops) {
+    return ((pair*)ops)->car();
+}
+Object* rest_operands(Object* ops) {
+    return ((pair*)ops)->cdr();
+}
+
+Object* list_of_values(Object* exp, pair* env) {
+    if (exp->type == ObjectType::THE_EMPTY_LIST) {
+        return the_empty_list;
+    }
+    else {
+        return cons(eval(first_operands(exp), env),
+                        list_of_values(rest_operands(exp), env));
+    }
+}
 
 Object* eval_assignment(Object* exp, pair* env) {
     if(!set_variable_value((symbol*)assignment_variable(exp),
@@ -411,6 +437,9 @@ Object* eval_definition(Object* exp, pair* env) {
 }
 
 Object* eval(Object* exp, pair* env) {
+    Object* procedure;
+    Object* arguments;
+tailcall:
     if (is_self_evaluating(exp))
         return exp;
     else if (is_variable(exp)) {
@@ -429,6 +458,19 @@ Object* eval(Object* exp, pair* env) {
     else if (is_definition(exp)) {
         return eval_definition(exp, env);        
     }
+    else if (is_if(exp)) {
+        exp = is_true(eval(if_predicate(exp), env)) ?
+                if_consequent(exp) :
+                if_alternative(exp);
+        goto tailcall;
+    }
+    else if (is_application(exp)) {
+        procedure = eval(proc_operator(exp), env);
+        arguments = list_of_values(proc_operands(exp), env);
+        if (procedure->type != ObjectType::PRIMITIVE_PROC)
+            return exp;
+        return ((Procedure*)procedure)->proc(arguments);
+    }
     else {
         fprintf(stderr, "cannot eval unknown expression type\n");
         exit(1);
@@ -440,6 +482,60 @@ Object* eval(Object* exp, pair* env) {
 void write(Object *obj) {
     if (obj == nullptr) return;
     obj->print();    
+}
+
+void init() {
+    True = new boolean(1);
+    False = new boolean(0);
+    
+    the_empty_list = new pair(nullptr, nullptr);
+    the_empty_list->type = ObjectType::THE_EMPTY_LIST;
+    
+    quote_symbol = make_symbol("quote");
+    define_symbol = make_symbol("define");
+    set_symbol = make_symbol("set!");
+    ok_symbol = make_symbol("ok");
+    if_symbol = make_symbol("if");    
+
+    setup_environment();
+#define add_procedure(scheme_name, obj)         \
+    define_variable(make_symbol(scheme_name),   \
+                    obj,                        \
+                    the_global_environment);
+    add_procedure("null?", new primitive_proc_is_null());
+    add_procedure("boolean?", new primitive_proc_is_boolean());
+    add_procedure("symbol?", new primitive_proc_is_symbol());
+    add_procedure("integer?", new primitive_proc_is_integer());
+    add_procedure("char?", new primitive_proc_is_char());
+    add_procedure("string?", new primitive_proc_is_string());
+    add_procedure("pair?", new primitive_proc_is_pair());
+    add_procedure("procedure?", new primitive_proc_is_proc());
+    
+    add_procedure("char->integer" , new primitive_proc_char_to_int());
+    add_procedure("integer->char" , new primitive_proc_int_to_char());
+    add_procedure("number->string", new primitive_proc_num_to_string());
+    add_procedure("string->number", new primitive_proc_string_to_num());
+    add_procedure("symbol->string", new primitive_proc_symbol_to_string());
+    add_procedure("string->symbol", new primitive_proc_string_to_symbol());
+      
+    add_procedure("+", new primitive_proc_add());
+    add_procedure("-"        , new primitive_proc_sub());
+    add_procedure("*"        , new primitive_proc_mul());
+    add_procedure("quotient" , new primitive_proc_quotient());
+    add_procedure("remainder", new primitive_proc_remainder());
+    add_procedure("="        , new primitive_proc_is_number_equ());
+    add_procedure("<"        , new primitive_proc_is_less_than());
+    add_procedure(">"        , new primitive_proc_is_greater_than());
+
+    add_procedure("cons"    , new primitive_proc_cons());
+    add_procedure("car"     , new primitive_proc_car());
+    add_procedure("cdr"     , new primitive_proc_cdr());
+    add_procedure("set-car!", new primitive_proc_set_car());
+    add_procedure("set-cdr!", new primitive_proc_set_cdr());
+    add_procedure("list"    , new primitive_proc_list());
+
+    add_procedure("eq?"    , new primitive_proc_is_equal());
+
 }
 
 int main(int argc, char *argv[])

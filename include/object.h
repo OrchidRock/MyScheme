@@ -9,7 +9,7 @@ namespace MyScheme {
 
 enum class ObjectType {
     THE_EMPTY_LIST, BOOLEAN, FIXNUM, 
-    STRING, CHARACTER, PAIR, SYMBOL
+    STRING, CHARACTER, PAIR, SYMBOL, PRIMITIVE_PROC
 };
 
 class Object {
@@ -21,6 +21,10 @@ public:
 class boolean : public Object {
 public:
     char value;
+    boolean(long val, ObjectType type = ObjectType::BOOLEAN) {
+        this->value = val;
+        this->type = type;
+    }
     void print() override {
         printf("#%c", (value == 0) ? 'f' : 't');
     }
@@ -64,6 +68,10 @@ class string: public Object {
 public:
     std::string value;
     string(char* val, ObjectType type = ObjectType::STRING){
+        this->type = type;
+        this->value = val;
+    }
+    string(std::string val, ObjectType type = ObjectType::STRING){
         this->type = type;
         this->value = val;
     }
@@ -144,27 +152,11 @@ public:
     }
 };
 
-class Frame : public Object {
-private:
-    std::unordered_map<symbol*, Object*> _symbol_table;
-public:
-    Frame(ObjectType type = ObjectType::PAIR) {
-        this->type = type;
-    }
-    void add_binding(symbol* var, Object* val){
-        _symbol_table[var] = val;
-    }
-    Object* lookup_variable(symbol* val) {
-        std::unordered_map<symbol*, Object*>::iterator iter;
-        iter = _symbol_table.find(val);
-        if (iter != _symbol_table.end())
-            return iter->second;
-        return nullptr;
-    }
-    void print() override {}
-};
-
-
+// signtone
+static boolean* True;// = new boolean(1);
+static boolean* False;// = new boolean(0);
+static symbol* ok_symbol;
 } // namespace MyScheme
+
 
 #endif // __OBJECT_H__
