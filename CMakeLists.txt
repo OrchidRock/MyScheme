@@ -6,4 +6,4 @@ project(MyScheme)
 
 include_directories(include/)
 
-add_executable(${PROJECT_NAME} src/main.cpp src/env.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp src/env.cpp gc/gc.cpp)

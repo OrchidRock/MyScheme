@@ -8,6 +8,7 @@ private:
     std::unordered_map<symbol*, Object*> _symbol_table;
 public:
     Frame(ObjectType type = ObjectType::PAIR) {
+        this->mark = 0;
         this->type = type;
     }
     Frame(Object* vars, Object* vals, ObjectType type = ObjectType::PAIR) {
@@ -36,6 +37,12 @@ public:
     void print(FILE* out = stdout) override {
         fprintf(out, "#frame<unordered_map>");
     }
+    void frame_map(void (*func)(Object*)) {
+        for (auto x : _symbol_table) {
+            func(x.second);
+        }
+    }
+    ~Frame() override {}
 };
 }
 

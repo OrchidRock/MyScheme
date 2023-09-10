@@ -5,6 +5,7 @@
 #include "object.h"
 #include "env.h"
 #include "procedure.h"
+#include "gc.h"
 
 using namespace MyScheme;
 
@@ -32,6 +33,7 @@ pair* make_environment();
 Object* read(FILE*);
 int peek(FILE *in);
 void write(FILE *out, Object *obj);
+Object *cons(Object *car, Object *cdr);
 
 Object* primitive_proc_string_to_symbol::proc(Object* exp) {
     return make_symbol(((string*)(((pair*)exp)->car()))->value);
@@ -45,6 +47,11 @@ Object* primitive_proc_interaction_env::proc(Object* exp) {
 Object* primitive_proc_envirnoment::proc(Object* exp) {
     return make_environment();
 }
+
+Object* primitive_proc_cons::proc(Object* args) {
+    pair* arguments = (pair*)args;
+    return cons(arguments->car(), ((pair*)(arguments->cdr()))->car());
+} 
 
 // IO
 Object* primitive_proc_load::proc(Object* arguments) {
@@ -335,6 +342,13 @@ void init() {
     eof_object = new eof();
 
     the_global_environment = make_environment();
+
+    // gc
+    gc_root_table.push_back(the_global_environment);
+    gc_root_table.push_back(True);
+    gc_root_table.push_back(False);
+    gc_root_table.push_back(the_empty_list);
+    gc_root_table.push_back(eof_object);
 }
 
 
@@ -346,8 +360,33 @@ void destory() {
 
 Object *cons(Object *car, Object *cdr) {
     pair *obj = new pair(car, cdr);
+    /*
+    if (gc_root_table.back() == car || gc_root_table.back() == cdr) {
+        gc_root_table.pop_back();
+    }
+    if (gc_root_table.back() == car || gc_root_table.back() == cdr) {
+        gc_root_table.pop_back();
+    }
+    gc_root_table.push_back((Object*)obj);
+    */
     return obj;
 }
+
+#define make_list_3(result,obj1,obj2,obj3) \
+        result = cons(obj2, obj3);  \
+        gc_root_table.push_back(result);    \
+        result = cons(obj1, result);        \
+        gc_root_table.pop_back();
+
+#define make_list_4(result,obj1,obj2,obj3,obj4) \
+        result = cons(obj3, obj4);              \
+        gc_root_table.push_back(result);        \
+        result = cons(obj2, result);            \
+        gc_root_table.pop_back();               \
+        gc_root_table.push_back(result);        \
+        result = cons(obj1, result);            \
+        gc_root_table.pop_back();               \
+
 
 char is_pair(Object *obj) {
     return obj->type == ObjectType::PAIR;
@@ -397,6 +436,10 @@ symbol* make_symbol(std::string buffer) {
     }
     symbol* new_symbol = new symbol(buffer);
     symbol_table[buffer] = new_symbol;
+    
+    // gc
+    //gc_root_table.push_back((Object*)new_symbol);
+    
     return new_symbol; 
 }
 

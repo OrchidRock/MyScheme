@@ -8,6 +8,7 @@ namespace  MyScheme {
 class Procedure : public Object {
 public:
     Procedure(ObjectType type = ObjectType::PRIMITIVE_PROC) {
+        this->mark = 0;
         this->type = type;
     }
     virtual Object* proc(Object* args) {
@@ -16,6 +17,7 @@ public:
     void print(FILE* out = stdout) override {
         fprintf(out, "#<primitive-procedure>"); 
     }
+    ~Procedure() override {}
 };
 
 class compound_proc : public Procedure {
@@ -26,6 +28,7 @@ public:
     
     compound_proc(Object* paras, Object* body, pair* env,
                     ObjectType type = ObjectType::COMPOUND_PROC) {
+        this->mark = 0;
         this->type = type;
         this->parameters = paras;
         this->body = body;
@@ -37,6 +40,7 @@ public:
     void print(FILE* out = stdout) override {
         fprintf(out, "#<compound-procedure>"); 
     }
+    ~compound_proc() override {}
 };
 
 class primitive_proc_add : public Procedure {
@@ -208,10 +212,7 @@ public:
 };
 class primitive_proc_cons : public Procedure {
 public:
-    Object* proc(Object* args) {
-        pair* arguments = (pair*)args;
-        return new pair(arguments->car(), ((pair*)(arguments->cdr()))->car());
-    } 
+    Object* proc(Object* args);
 };
 class primitive_proc_car : public Procedure {
 public:

@@ -39,7 +39,7 @@ abc
 
 ```
 
-## complex emaple
+## Complex example
 
 ```shell
 > (define count
@@ -80,7 +80,8 @@ ok
 120
 ```
 
-## test
+## Script Test
+
 `$ cd test`
 
 `$ ../build/MyScheme`
@@ -115,3 +116,5 @@ ok
 ok
 > T7
 ```
+
+## About Garbage Collector
