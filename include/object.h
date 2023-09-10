@@ -10,13 +10,14 @@ namespace MyScheme {
 enum class ObjectType {
     THE_EMPTY_LIST, BOOLEAN, FIXNUM, 
     STRING, CHARACTER, PAIR, SYMBOL, 
-    PRIMITIVE_PROC, COMPOUND_PROC
+    PRIMITIVE_PROC, COMPOUND_PROC,
+    INPUT_PORT, OUTPUT_PORT, EOF_OBJECT
 };
 
 class Object {
 public:
     ObjectType type;
-    virtual void print() = 0;
+    virtual void print(FILE* out = stdout) = 0;
 };
 
 class boolean : public Object {
@@ -26,8 +27,8 @@ public:
         this->value = val;
         this->type = type;
     }
-    void print() override {
-        printf("#%c", (value == 0) ? 'f' : 't');
+    void print(FILE* out = stdout) override {
+        fprintf(out, "#%c", (value == 0) ? 'f' : 't');
     }
 };
 
@@ -38,8 +39,8 @@ public:
         this->type = type;
         this->value = val;
     }
-    void print() override {
-        printf("%ld", value);
+    void print(FILE* out = stdout) override {
+        fprintf(out, "%ld", value);
     }
 };
 
@@ -50,17 +51,17 @@ public:
         this->type = type;
         this->value = val;
     }
-    void print() override {
-        printf("#\\");
+    void print(FILE* out = stdout) override {
+        fprintf(out, "#\\");
         switch (value) {
             case '\n':
-                printf("newline");
+                fprintf(out, "newline");
                 break;
             case ' ':
-                printf("space");
+                fprintf(out, "space");
                 break;
             default:
-                putchar(value);
+                putc(value, out);
         }
     }
 };
@@ -76,24 +77,24 @@ public:
         this->type = type;
         this->value = val;
     }
-    void print() override {
-        putchar('"');
+    void print(FILE* out = stdout) override {
+        putc('"', out);
         for (int i = 0; i < value.size(); i++) {
             switch (value[i]) {
             case '\n':
-                printf("\\n");
+                fprintf(out, "\\n");
                 break;
             case '\\':
-                printf("\\\\");
+                fprintf(out, "\\\\");
                 break;
             case '"':
-                printf("\\\"");
+                fprintf(out, "\\\"");
                 break;
             default:
-                putchar(value[i]);
+                putc(value[i], out);
             }
         }
-        putchar('"');
+        putc('"', out);
     }
 };
 
@@ -104,8 +105,8 @@ public:
         this->type = type;
         this->value = val;
     }
-    void print() override {
-        printf("%s", value.c_str());
+    void print(FILE* out = stdout) override {
+        fprintf(out, "%s", value.c_str());
     }
 }; 
 
@@ -131,27 +132,63 @@ public:
     void set_cdr(Object* val) {
         _cdr = val;
     }
-    void print_elements() {
-        _car->print();
+    void print_elements(FILE* out = stdout) {
+        _car->print(out);
         if (_cdr->type == ObjectType::PAIR) {
-            printf(" ");
+            fprintf(out, " ");
             ((pair*)_cdr)->print_elements();
             return;
         }else if (_cdr->type == ObjectType::THE_EMPTY_LIST){
             return;
         }else{
-            printf(" . ");
+            fprintf(out, " . ");
         }
-        _cdr->print();
+        _cdr->print(out);
     }
-    void print() override{
-        printf("(");
+    void print(FILE* out = stdout) override {
+        fprintf(out, "(");
         if (type != ObjectType::THE_EMPTY_LIST) {
-            this->print_elements();
+            this->print_elements(out);
         }
-        printf(")");
+        fprintf(out, ")");
     }
 };
+
+class input_port : public Object {
+public:
+    FILE* stream;
+    input_port(FILE* stream, ObjectType type = ObjectType::INPUT_PORT){
+        this->stream = stream;
+        this->type = type;
+    }
+    void print(FILE* out = stdout) override {
+        fprintf(out, "#<input-port>");
+    }
+};
+
+class output_port : public Object {
+public:
+    FILE* stream;
+    output_port(FILE* stream, ObjectType type = ObjectType::OUTPUT_PORT){
+        this->stream = stream;
+        this->type = type;
+    }
+    void print(FILE* out = stdout) override {
+        fprintf(out, "#<output-port>");
+    }
+};
+
+class eof : public Object {
+public:
+    eof(ObjectType type = ObjectType::EOF_OBJECT){
+        this->type = type;
+    }
+    void print(FILE* out = stdout) override {
+        fprintf(out, "#<eof>");
+    }
+};
+
+
 
 // signtone
 static boolean* True;// = new boolean(1);

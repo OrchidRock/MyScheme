@@ -13,8 +13,8 @@ public:
     virtual Object* proc(Object* args) {
         return args;
     }
-    void print() override {
-        printf("#<procedure>"); 
+    void print(FILE* out = stdout) override {
+        fprintf(out, "#<primitive-procedure>"); 
     }
 };
 
@@ -34,6 +34,9 @@ public:
     Object* proc(Object* args) {
         return args;
     } 
+    void print(FILE* out = stdout) override {
+        fprintf(out, "#<compound-procedure>"); 
+    }
 };
 
 class primitive_proc_add : public Procedure {
@@ -413,6 +416,65 @@ public:
     Object* proc(Object* args);
 };
 class primitive_proc_envirnoment : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+
+// IO
+class primitive_proc_load : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_open_input_port : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_close_input_port : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_is_input_port : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_read : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_read_char : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+
+class primitive_proc_peak_char : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_is_eof : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_open_output_port : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_close_output_port : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_is_output_port : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_write_char : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_write : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_error : public Procedure {
 public:
     Object* proc(Object* args);
 };

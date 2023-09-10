@@ -20,6 +20,7 @@ symbol* else_symbol;
 symbol* let_symbol;
 symbol* and_symbol;
 symbol* or_symbol;
+eof* eof_object;
 std::unordered_map<std::string, symbol*> symbol_table;
 pair* the_global_environment;
 
@@ -28,6 +29,9 @@ Object* eval(Object* exp, pair* env);
 void define_variable(symbol* var, Object* val, pair* env);
 pair* setup_environment();
 pair* make_environment();
+Object* read(FILE*);
+int peek(FILE *in);
+void write(FILE *out, Object *obj);
 
 Object* primitive_proc_string_to_symbol::proc(Object* exp) {
     return make_symbol(((string*)(((pair*)exp)->car()))->value);
@@ -42,12 +46,197 @@ Object* primitive_proc_envirnoment::proc(Object* exp) {
     return make_environment();
 }
 
+// IO
+Object* primitive_proc_load::proc(Object* arguments) {
+    const char *filename;
+    FILE *in;
+    Object *exp;
+    Object *result;
+    
+    Object* first_argu = ((pair*)arguments)->car();
+    if (first_argu->type != ObjectType::STRING){
+        return nullptr;
+    }
+    filename = ((string*)first_argu)->value.c_str();
+    
+    in = fopen(filename, "r");
+    if (in == NULL) {
+        fprintf(stderr, "could not load file \"%s\"", filename);
+        exit(1);
+    }
+    while ((exp = read(in)) != NULL) {
+        result = eval(exp, the_global_environment);
+    }
+    fclose(in);
+    return result;
+
+}
+
+Object* primitive_proc_open_input_port::proc(Object *arguments) {
+    const char *filename;
+    FILE *in;
+
+    Object* first_argu = ((pair*)arguments)->car();
+    if (first_argu->type != ObjectType::STRING){
+        return eof_object;
+    }
+    filename = ((string*)first_argu)->value.c_str();
+    in = fopen(filename, "r");
+    if (in == NULL) {
+        fprintf(stderr, "could not open file \"%s\"\n", filename);
+        exit(1);
+    }
+    return new input_port(in);
+}
+
+Object * primitive_proc_close_input_port::proc(Object *arguments) {
+    int result;
+    Object* first_argu = ((pair*)arguments)->car();
+    if (first_argu->type != ObjectType::INPUT_PORT){
+        return eof_object;
+    }
+    result = fclose(((input_port*)first_argu)->stream);
+    if (result == EOF) {
+        fprintf(stderr, "could not close input port\n");
+        exit(1);
+    }
+    return ok_symbol;
+}
+
+Object * primitive_proc_is_input_port::proc(Object *arguments) {
+    Object* first_argu = ((pair*)arguments)->car();
+    return (first_argu->type == ObjectType::INPUT_PORT) ? True: False;
+}
+
+Object *primitive_proc_read::proc(Object *arguments) {
+    FILE *in;
+    Object *result;
+    if (arguments->type == ObjectType::THE_EMPTY_LIST){
+        in = stdin;
+    } else{
+        Object* first_argu = ((pair*)arguments)->car();
+        in = ((input_port*)first_argu)->stream;
+    }
+    result = read(in);
+    return (result == nullptr) ? eof_object : result;
+}
+
+Object *primitive_proc_read_char::proc(Object *arguments) {
+    FILE *in;
+    int result;
+    if (arguments->type == ObjectType::THE_EMPTY_LIST){
+        in = stdin;
+    } else{
+        Object* first_argu = ((pair*)arguments)->car();
+        in = ((input_port*)first_argu)->stream;
+    }
+    
+    result = getc(in);
+    return (result == EOF) ? (Object*)eof_object : (Object*)(new character(result));
+}
+Object *primitive_proc_peak_char::proc(Object *arguments) {
+    FILE *in;
+    int result;
+    if (arguments->type == ObjectType::THE_EMPTY_LIST){
+        in = stdin;
+    } else{
+        Object* first_argu = ((pair*)arguments)->car();
+        in = ((input_port*)first_argu)->stream;
+    }
+    result = peek(in);
+    return (result == EOF) ? (Object*)eof_object : (Object*)(new character(result));
+}
+
+Object* primitive_proc_is_eof::proc(Object *arguments) {
+    Object* first_argu = ((pair*)arguments)->car();
+    return (first_argu->type == ObjectType::EOF_OBJECT) ? True : False;
+}
+Object *primitive_proc_open_output_port::proc(Object *arguments) {
+    const char *filename;
+    FILE *out;
+    
+    Object* first_argu = ((pair*)arguments)->car();
+    if (first_argu->type != ObjectType::STRING){
+        return eof_object;
+    }
+    filename = ((string*)first_argu)->value.c_str();
+    out = fopen(filename, "w");
+    if (out == NULL) {
+        fprintf(stderr, "could not open file \"%s\"\n", filename);
+        exit(1);
+    }
+    return new output_port(out);
+}
+
+Object *primitive_proc_close_output_port::proc(Object *arguments) {
+    int result;
+    Object* first_argu = ((pair*)arguments)->car();
+    if (first_argu->type != ObjectType::OUTPUT_PORT){
+        return eof_object;
+    }
+    result = fclose(((output_port*)first_argu)->stream);
+    if (result == EOF) {
+        fprintf(stderr, "could not close output port\n");
+        exit(1);
+    }
+    return ok_symbol;
+}
+Object * primitive_proc_is_output_port::proc(Object *arguments) {
+    Object* first_argu = ((pair*)arguments)->car();
+    return (first_argu->type == ObjectType::OUTPUT_PORT) ? True: False;
+}
+
+Object * primitive_proc_write_char::proc(Object *arguments) {
+    Object *ch;
+    FILE *out;
+    
+    ch = ((pair*)arguments)->car();
+    arguments = ((pair*)arguments)->cdr();
+    
+    if (arguments->type == ObjectType::THE_EMPTY_LIST){
+        out = stdout;
+    } else{
+        Object* first_argu = ((pair*)arguments)->car();
+        out = ((output_port*)first_argu)->stream;
+    }
+    putc(((character*)ch)->value, out);    
+    fflush(out);
+    return ok_symbol;
+}
+
+Object *primitive_proc_write::proc(Object *arguments) {
+    Object *exp;
+    FILE *out;
+    
+    exp = ((pair*)arguments)->car();
+    arguments = ((pair*)arguments)->cdr();
+    
+    if (arguments->type == ObjectType::THE_EMPTY_LIST){
+        out = stdout;
+    } else{
+        Object* first_argu = ((pair*)arguments)->car();
+        out = ((output_port*)first_argu)->stream;
+    }
+    write(out, exp);
+    fflush(out);
+    return ok_symbol;
+}
+
+Object *primitive_proc_error::proc(Object *arguments) {
+    while (arguments->type !=  ObjectType::THE_EMPTY_LIST) {
+        write(stderr, ((pair*)arguments)->car());
+        fprintf(stderr, " ");
+        arguments = ((pair*)arguments)->cdr();
+    };
+    printf("\nexiting\n");
+    exit(1);
+}
+
 pair* setup_environment() {
     pair* env;
     env = extend_environment(new Frame(), the_empty_list);
     return env;
 }
-
 
 void populate_environment(pair* env){ 
     setup_environment();
@@ -96,6 +285,24 @@ void populate_environment(pair* env){
     add_procedure("null-environment"  , new primitive_proc_null_env());
     add_procedure("environment"  , new primitive_proc_envirnoment());
     add_procedure("eval"  , new primitive_proc_eval());
+
+    
+    add_procedure("load"  , new primitive_proc_load());
+    add_procedure("open_input_port"  , new primitive_proc_open_input_port());
+    add_procedure("close_input_port"  , new primitive_proc_close_input_port());
+    add_procedure("input-port?"  , new primitive_proc_is_input_port());
+    add_procedure("read"  , new primitive_proc_read());
+    add_procedure("read-char"  , new primitive_proc_read_char());
+    add_procedure("peak-char"  , new primitive_proc_peak_char());
+    add_procedure("eof-object?"  , new primitive_proc_is_eof());
+    add_procedure("open-output-port"  , new primitive_proc_open_output_port());
+    add_procedure("close-output-port"  , new primitive_proc_close_output_port());
+    add_procedure("output-port?"  , new primitive_proc_is_output_port());
+    add_procedure("write"  , new primitive_proc_write());
+    add_procedure("write-char"  , new primitive_proc_write_char());
+    
+    add_procedure("error"  , new primitive_proc_error());
+
 }
 
 pair* make_environment() {
@@ -124,6 +331,8 @@ void init() {
     and_symbol = make_symbol("and");
     or_symbol = make_symbol("or");
     
+    eof_object = new eof();
+
     the_global_environment = make_environment();
 }
 
@@ -422,6 +631,8 @@ Object *read(FILE *in) {
     }
     else if (c == '\'') { /* read quoted expression. */
         return cons(quote_symbol, cons(read(in), the_empty_list));
+    }else if (c == EOF) {
+        return nullptr;
     }
     else {
         fprintf(stderr, "bad input. Unexpected '%c'\n", c);
@@ -856,24 +1067,29 @@ tailcall:
     exit(1);
 }
 
-void write(Object *obj) {
+void write(FILE* out, Object *obj) {
     if (obj == nullptr) return;
-    obj->print();    
+    obj->print(out); 
 }
 
 
 int main(int argc, char *argv[])
 {
+    Object* exp;
     std::cout << "Welcome to MyScheme. Use Ctrl-C to exit.\n";
     
     init();
 
     while  (true) {
         std::cout << "> ";
-        write(eval(read(stdin), the_global_environment));
+        exp = read(stdin);
+        if (exp == nullptr){
+            break;
+        }
+        write(stdout, eval(exp, the_global_environment));
         std::cout << "\n";
     }
-
+    printf("Goodbye. Have a nice day!");
     destory();
        
     return 0;

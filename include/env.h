@@ -33,8 +33,8 @@ public:
             return iter->second;
         return nullptr;
     }
-    void print() override {
-        printf("#frame<unordered_map>");
+    void print(FILE* out = stdout) override {
+        fprintf(out, "#frame<unordered_map>");
     }
 };
 }
