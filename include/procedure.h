@@ -42,6 +42,12 @@ public:
         pair* arguments = (pair*)args;
         long result =  0;
         while(arguments->type != ObjectType::THE_EMPTY_LIST) {
+            if (arguments->type == ObjectType::FIXNUM){
+                result += ((fixnum*)arguments)->value;
+                break;
+            }else if (arguments->type != ObjectType::PAIR){
+                break;
+            }
             if (arguments->car()->type != ObjectType::FIXNUM) {
                 printf("invalid argument");
                 arguments->car()->print();
@@ -61,6 +67,12 @@ public:
         long result = ((fixnum*)(arguments->car()))->value;
         arguments = (pair*)(arguments->cdr());
         while(arguments->type != ObjectType::THE_EMPTY_LIST) {
+            if (arguments->type == ObjectType::FIXNUM){
+                result -= ((fixnum*)arguments)->value;
+                break;
+            }else if (arguments->type != ObjectType::PAIR){
+                break;
+            }
             if (arguments->car()->type != ObjectType::FIXNUM) {
                 printf("invalid argument");
                 arguments->car()->print();
@@ -79,6 +91,12 @@ public:
         pair* arguments = (pair*)args;
         long result =  1;
         while(arguments->type != ObjectType::THE_EMPTY_LIST) {
+            if (arguments->type == ObjectType::FIXNUM){
+                result *= ((fixnum*)arguments)->value;
+                break;
+            }else if (arguments->type != ObjectType::PAIR){
+                break;
+            }
             if (arguments->car()->type != ObjectType::FIXNUM) {
                 printf("invalid argument");
                 arguments->car()->print();
@@ -274,6 +292,24 @@ public:
         }
     }
 };
+
+class primitive_proc_apply : public Procedure {
+public:
+    Object* proc(Object *args) {
+        fprintf(stderr, "illegal state: The body of the apply" 
+                        "primitive procedure should not execute.\n");
+        return nullptr;
+    }
+};
+class primitive_proc_eval : public Procedure {
+public:
+    Object* proc(Object *args) {
+        fprintf(stderr, "illegal state: The body of the eval" 
+                        "primitive procedure should not execute.\n");
+        return nullptr;
+    }
+};
+            
 class primitive_proc_is_null : public Procedure {
 public:
     Object* proc(Object* args) {
@@ -364,14 +400,22 @@ public:
 };
 class primitive_proc_string_to_symbol : public Procedure {
 public:
-    Object* proc(Object* args) {
-        Object* obj = ((pair*)args)->car();
-        //return new fixnum(std::stoi(((string*)obj)->value));
-        return obj;
-    }
+    Object* proc(Object* args);
 };
 
+class primitive_proc_interaction_env : public Procedure {
+public:
+    Object* proc(Object* args);
+};
 
+class primitive_proc_null_env : public Procedure {
+public:
+    Object* proc(Object* args);
+};
+class primitive_proc_envirnoment : public Procedure {
+public:
+    Object* proc(Object* args);
+};
 
 }
 

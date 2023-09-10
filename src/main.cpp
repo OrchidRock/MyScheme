@@ -14,15 +14,117 @@ symbol* define_symbol;
 symbol* set_symbol;
 symbol* if_symbol;
 symbol* lambda_symbol;
+symbol* begin_symbol;
+symbol* cond_symbol;
+symbol* else_symbol;
+symbol* let_symbol;
+symbol* and_symbol;
+symbol* or_symbol;
 std::unordered_map<std::string, symbol*> symbol_table;
 pair* the_global_environment;
 
 symbol* make_symbol(std::string buffer);
 Object* eval(Object* exp, pair* env);
+void define_variable(symbol* var, Object* val, pair* env);
+pair* setup_environment();
+pair* make_environment();
 
-void setup_environment() {
-    the_global_environment = the_empty_list;
-    the_global_environment = extend_environment(new Frame(), the_global_environment);
+Object* primitive_proc_string_to_symbol::proc(Object* exp) {
+    return make_symbol(((string*)(((pair*)exp)->car()))->value);
+}
+Object* primitive_proc_null_env::proc(Object* exp) {
+    return setup_environment();
+}
+Object* primitive_proc_interaction_env::proc(Object* exp) {
+    return the_global_environment;
+}
+Object* primitive_proc_envirnoment::proc(Object* exp) {
+    return make_environment();
+}
+
+pair* setup_environment() {
+    pair* env;
+    env = extend_environment(new Frame(), the_empty_list);
+    return env;
+}
+
+
+void populate_environment(pair* env){ 
+    setup_environment();
+#define add_procedure(scheme_name, obj)         \
+    define_variable(make_symbol(scheme_name),   \
+                    obj,                        \
+                    env);
+
+    add_procedure("null?", new primitive_proc_is_null());
+    add_procedure("boolean?", new primitive_proc_is_boolean());
+    add_procedure("symbol?", new primitive_proc_is_symbol());
+    add_procedure("integer?", new primitive_proc_is_integer());
+    add_procedure("char?", new primitive_proc_is_char());
+    add_procedure("string?", new primitive_proc_is_string());
+    add_procedure("pair?", new primitive_proc_is_pair());
+    add_procedure("procedure?", new primitive_proc_is_proc());
+    
+    add_procedure("char->integer" , new primitive_proc_char_to_int());
+    add_procedure("integer->char" , new primitive_proc_int_to_char());
+    add_procedure("number->string", new primitive_proc_num_to_string());
+    add_procedure("string->number", new primitive_proc_string_to_num());
+    add_procedure("symbol->string", new primitive_proc_symbol_to_string());
+    add_procedure("string->symbol", new primitive_proc_string_to_symbol());
+      
+    add_procedure("+", new primitive_proc_add());
+    add_procedure("-"        , new primitive_proc_sub());
+    add_procedure("*"        , new primitive_proc_mul());
+    add_procedure("quotient" , new primitive_proc_quotient());
+    add_procedure("remainder", new primitive_proc_remainder());
+    add_procedure("="        , new primitive_proc_is_number_equ());
+    add_procedure("<"        , new primitive_proc_is_less_than());
+    add_procedure(">"        , new primitive_proc_is_greater_than());
+
+    add_procedure("cons"    , new primitive_proc_cons());
+    add_procedure("car"     , new primitive_proc_car());
+    add_procedure("cdr"     , new primitive_proc_cdr());
+    add_procedure("set-car!", new primitive_proc_set_car());
+    add_procedure("set-cdr!", new primitive_proc_set_cdr());
+    add_procedure("list"    , new primitive_proc_list());
+
+    add_procedure("eq?"    , new primitive_proc_is_equal());
+    
+    add_procedure("apply"  , new primitive_proc_apply());
+    add_procedure("interaction-environment"  , 
+                    new primitive_proc_interaction_env());
+    add_procedure("null-environment"  , new primitive_proc_null_env());
+    add_procedure("environment"  , new primitive_proc_envirnoment());
+    add_procedure("eval"  , new primitive_proc_eval());
+}
+
+pair* make_environment() {
+    pair* env;
+    env  = setup_environment();
+    populate_environment(env);    
+    return env;
+}
+void init() {
+    True = new boolean(1);
+    False = new boolean(0);
+    
+    the_empty_list = new pair(nullptr, nullptr);
+    the_empty_list->type = ObjectType::THE_EMPTY_LIST;
+    
+    quote_symbol = make_symbol("quote");
+    define_symbol = make_symbol("define");
+    set_symbol = make_symbol("set!");
+    ok_symbol = make_symbol("ok");
+    if_symbol = make_symbol("if");    
+    lambda_symbol = make_symbol("lambda");
+    begin_symbol = make_symbol("begin");
+    cond_symbol = make_symbol("cond");
+    if_symbol = make_symbol("if");
+    let_symbol = make_symbol("let");
+    and_symbol = make_symbol("and");
+    or_symbol = make_symbol("or");
+    
+    the_global_environment = make_environment();
 }
 
 
@@ -393,6 +495,14 @@ Object* make_lambda(Object* parameters, Object* body) {
     return cons(lambda_symbol, cons(parameters, body));
 }
 
+Object* make_begin(Object* exp) {
+    return cons(begin_symbol, exp);
+}
+
+bool is_begin(Object* exp) {
+    return is_tagged_list(exp, begin_symbol);
+}
+
 bool is_lambda(Object* exp) {
     return is_tagged_list(exp, lambda_symbol);
 }
@@ -414,6 +524,13 @@ Object* rest_exps(Object* seq) {
     return ((pair*)seq)->cdr();
 }
 
+Object* make_if(Object* predicate, Object* consequent, Object* alternative) {
+    return cons(if_symbol, 
+                    cons(predicate, 
+                            cons(consequent, 
+                                    cons(alternative, the_empty_list))));
+}
+
 bool is_if(Object* exp) {
     return is_tagged_list(exp, if_symbol);
 }
@@ -429,9 +546,73 @@ Object* if_alternative(Object* exp) {
     return ((pair*)obj)->car();
 }
 
+bool is_cond(Object* exp) {
+    return is_tagged_list(exp, cond_symbol);
+}
+Object* cond_clauses(Object* exp) {
+    return ((pair*)exp)->cdr();
+}
+Object* cond_predicate(Object* clause) {
+    return ((pair*)clause)->car();
+}
+Object* cond_actions(Object* clause) {
+    return ((pair*)clause)->cdr();
+}
+char is_cond_else_clause(Object* clause) {
+    return cond_predicate(clause) == else_symbol;
+}
+
+Object *sequence_to_exp(Object *seq) {
+    if (seq->type == ObjectType::THE_EMPTY_LIST) {
+        return seq;
+    }
+    else if (is_last_exp(seq)) {
+        return first_exp(seq);
+    }
+    else {
+        return make_begin(seq);
+    }
+}
+
+Object *expand_clauses(Object *clauses) {
+    Object *first;
+    Object *rest;
+    
+    if (clauses->type == ObjectType::THE_EMPTY_LIST) {
+        return False;
+    }
+    else {
+        first = ((pair*)clauses)->car();
+        rest  = ((pair*)clauses)->cdr();
+        if (is_cond_else_clause(first)) {
+            if (rest->type == ObjectType::THE_EMPTY_LIST) {
+                return sequence_to_exp(cond_actions(first));
+            }
+            else {
+                fprintf(stderr, "else clause isn't last cond->if");
+                exit(1);
+            }
+        }
+        else {
+            return make_if(cond_predicate(first),
+                           sequence_to_exp(cond_actions(first)),
+                           expand_clauses(rest));
+        }
+    }
+}
+
+Object *cond_to_if(Object *exp) {
+    return expand_clauses(cond_clauses(exp));
+}
+
+Object* make_application(Object* op, Object* operands) {
+    return cons(op, operands);
+}
+
 char is_application(Object* exp) {
     return is_pair(exp);
 }
+
 Object* proc_operator(Object* exp) {
     return ((pair*)exp)->car();
 }
@@ -453,6 +634,88 @@ Object* list_of_values(Object* exp, pair* env) {
         return cons(eval(first_operands(exp), env),
                         list_of_values(rest_operands(exp), env));
     }
+}
+
+char is_let(Object* exp) {
+    return is_tagged_list(exp, let_symbol);
+}
+
+Object* let_bindings(Object* exp) {
+    return ((pair*)(((pair*)exp)->cdr()))->car();
+}
+Object* let_body(Object* exp) {
+    return ((pair*)(((pair*)exp)->cdr()))->cdr();
+}
+Object* binding_parameter(Object* binding) {
+    return ((pair*)binding)->car();
+}
+Object* binding_argument(Object* binding) {
+    return ((pair*)(((pair*)binding)->cdr()))->car();
+}
+
+Object* bindings_arguments(Object* bindings) {
+    return (bindings->type == ObjectType::THE_EMPTY_LIST) ?
+                the_empty_list :
+                    cons(binding_argument(((pair*)bindings)->car()),
+                         bindings_arguments(((pair*)bindings)->cdr()));
+}
+Object* bindings_parameters(Object* bindings) {
+    return (bindings->type == ObjectType::THE_EMPTY_LIST) ?
+                the_empty_list :
+                    cons(binding_parameter(((pair*)bindings)->car()),
+                         bindings_parameters(((pair*)bindings)->cdr()));
+}
+
+Object* let_parameters(Object* exp) {
+    return bindings_parameters(let_bindings(exp));
+}
+Object* let_arguments(Object* exp) {
+    return bindings_arguments(let_bindings(exp));
+}
+Object* let_to_application(Object* exp) {
+    return make_application(
+                make_lambda(let_parameters(exp),
+                            let_body(exp)),
+                let_arguments(exp));
+}
+
+char is_and(Object* exp) {
+    return is_tagged_list(exp, and_symbol);
+}
+char is_or(Object* exp) {
+    return is_tagged_list(exp, or_symbol);
+}
+Object* and_tests(Object* exp) {
+    return ((pair*)exp)->cdr();
+}
+Object* or_tests(Object* exp) {
+    return ((pair*)exp)->cdr();
+}
+
+Object *apply_operator(Object *arguments) {
+    return ((pair*)arguments)->car();
+}
+
+Object *prepare_apply_operands(Object *arguments) {
+    if (((pair*)arguments)->cdr()->type == ObjectType::THE_EMPTY_LIST) {
+        return ((pair*)arguments)->car();
+    }
+    else {
+        return cons(((pair*)arguments)->car(),
+                    prepare_apply_operands(((pair*)arguments)->cdr()));
+    }
+}
+
+Object *apply_operands(Object *arguments) {
+    return prepare_apply_operands(((pair*)arguments)->cdr());
+}
+
+
+Object *eval_expression(Object *exp) {
+    return ((pair*)exp)->car();
+}
+Object* eval_environment(Object* exp) {
+    return ((pair*)(((pair*)exp)->cdr()))->car();
 }
 
 Object* eval_assignment(Object* exp, pair* env) {
@@ -478,13 +741,16 @@ Object* eval_definition(Object* exp, pair* env) {
 Object* eval(Object* exp, pair* env) {
     Object* procedure;
     Object* arguments;
+    Object* result;
 tailcall:
     if (is_self_evaluating(exp))
         return exp;
     else if (is_variable(exp)) {
         Object* obj = lookup_variable_value(static_cast<symbol*>(exp), env);
         if (obj == nullptr) {
-            fprintf(stderr, "Unbounded variable\n");
+            printf("Unbounded variable: ");
+            exp->print();
+            printf("\n");
             exit(1);
         }else
             return obj;
@@ -508,20 +774,75 @@ tailcall:
                                  lambda_body(exp),
                                  env);
     }
+    else if (is_begin(exp)) {
+        exp = ((pair*)exp)->cdr();
+        while(!is_last_exp(exp)) {
+            eval(first_exp(exp), env);
+            exp = rest_exps(exp);
+        }
+        exp = first_exp(exp);
+        goto tailcall;
+    }
+    else if (is_cond(exp)) {
+        exp = cond_to_if(exp);
+        goto  tailcall;
+    } else if (is_let(exp)) {
+        exp = let_to_application(exp);
+        goto tailcall;
+    }
+    else if (is_and(exp)) {
+        exp = and_tests(exp);
+        if (exp->type == ObjectType::THE_EMPTY_LIST) {
+            return True;
+        }
+        while (!is_last_exp(exp)) {
+            result = eval(first_exp(exp), env);
+            if(is_false(result)) {
+                return result;
+            }
+            exp = rest_exps(exp);
+        }
+        exp = first_exp(exp);
+        goto tailcall;
+    }
+    else if (is_or(exp)) {
+        exp = or_tests(exp);
+        if (exp->type == ObjectType::THE_EMPTY_LIST) {
+            return False;
+        }
+        while (!is_last_exp(exp)) {
+            result = eval(first_exp(exp), env);
+            if(is_true(result)) {
+                return result;
+            }
+            exp = rest_exps(exp);
+        }
+        exp = first_exp(exp);
+        goto tailcall;
+    }
     else if (is_application(exp)) {
         procedure = eval(proc_operator(exp), env);
         arguments = list_of_values(proc_operands(exp), env);
+        
+        if (procedure->type == ObjectType::PRIMITIVE_PROC && 
+                        dynamic_cast<primitive_proc_eval*>(procedure)){
+            exp = eval_expression(arguments);
+            env = (pair*)eval_environment(arguments);
+            goto tailcall;
+        }
+        
+        if (procedure->type == ObjectType::PRIMITIVE_PROC && 
+                        dynamic_cast<primitive_proc_apply*>(procedure)){
+            procedure = apply_operator(arguments);
+            arguments = apply_operands(arguments);
+        }
+         
         if (procedure->type == ObjectType::PRIMITIVE_PROC){
             return ((Procedure*)procedure)->proc(arguments);
         }else if(procedure->type == ObjectType::COMPOUND_PROC) {
             compound_proc* cp = (compound_proc*)procedure;
             env = extend_environment(new Frame(cp->parameters, arguments), cp->env);
-            exp = cp->body;
-            while(!is_last_exp(exp)) {
-                eval(first_exp(exp), env);
-                exp = rest_exps(exp);
-            }
-            exp = first_exp(exp);
+            exp = make_begin(cp->body);
             goto tailcall;
         }else {
             return exp;
@@ -540,60 +861,6 @@ void write(Object *obj) {
     obj->print();    
 }
 
-void init() {
-    True = new boolean(1);
-    False = new boolean(0);
-    
-    the_empty_list = new pair(nullptr, nullptr);
-    the_empty_list->type = ObjectType::THE_EMPTY_LIST;
-    
-    quote_symbol = make_symbol("quote");
-    define_symbol = make_symbol("define");
-    set_symbol = make_symbol("set!");
-    ok_symbol = make_symbol("ok");
-    if_symbol = make_symbol("if");    
-    lambda_symbol = make_symbol("lambda");
-
-    setup_environment();
-#define add_procedure(scheme_name, obj)         \
-    define_variable(make_symbol(scheme_name),   \
-                    obj,                        \
-                    the_global_environment);
-    add_procedure("null?", new primitive_proc_is_null());
-    add_procedure("boolean?", new primitive_proc_is_boolean());
-    add_procedure("symbol?", new primitive_proc_is_symbol());
-    add_procedure("integer?", new primitive_proc_is_integer());
-    add_procedure("char?", new primitive_proc_is_char());
-    add_procedure("string?", new primitive_proc_is_string());
-    add_procedure("pair?", new primitive_proc_is_pair());
-    add_procedure("procedure?", new primitive_proc_is_proc());
-    
-    add_procedure("char->integer" , new primitive_proc_char_to_int());
-    add_procedure("integer->char" , new primitive_proc_int_to_char());
-    add_procedure("number->string", new primitive_proc_num_to_string());
-    add_procedure("string->number", new primitive_proc_string_to_num());
-    add_procedure("symbol->string", new primitive_proc_symbol_to_string());
-    add_procedure("string->symbol", new primitive_proc_string_to_symbol());
-      
-    add_procedure("+", new primitive_proc_add());
-    add_procedure("-"        , new primitive_proc_sub());
-    add_procedure("*"        , new primitive_proc_mul());
-    add_procedure("quotient" , new primitive_proc_quotient());
-    add_procedure("remainder", new primitive_proc_remainder());
-    add_procedure("="        , new primitive_proc_is_number_equ());
-    add_procedure("<"        , new primitive_proc_is_less_than());
-    add_procedure(">"        , new primitive_proc_is_greater_than());
-
-    add_procedure("cons"    , new primitive_proc_cons());
-    add_procedure("car"     , new primitive_proc_car());
-    add_procedure("cdr"     , new primitive_proc_cdr());
-    add_procedure("set-car!", new primitive_proc_set_car());
-    add_procedure("set-cdr!", new primitive_proc_set_cdr());
-    add_procedure("list"    , new primitive_proc_list());
-
-    add_procedure("eq?"    , new primitive_proc_is_equal());
-
-}
 
 int main(int argc, char *argv[])
 {
