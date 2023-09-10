@@ -64,4 +64,7 @@
 (define (not x)
   (if x #f #t))
 
+(define (square x) (* x x))
+(define (odd? x) (if (= 0 (remainder x 2)) #f #t))
+
 'stdlib-loaded

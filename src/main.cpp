@@ -326,6 +326,7 @@ void init() {
     lambda_symbol = make_symbol("lambda");
     begin_symbol = make_symbol("begin");
     cond_symbol = make_symbol("cond");
+    else_symbol = make_symbol("else");
     if_symbol = make_symbol("if");
     let_symbol = make_symbol("let");
     and_symbol = make_symbol("and");

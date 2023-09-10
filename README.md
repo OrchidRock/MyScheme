@@ -1,5 +1,5 @@
 # MyScheme
-An experimental Scheme compiler implemented  using C++.
+An experimental Scheme interpreter implemented using C++.
 
 ## Build & Run
 `$ cmake -B build`
@@ -42,8 +42,6 @@ abc
 ## complex emaple
 
 ```shell
-> (load "stdlib.scm")
-
 > (define count
         ((lambda (total)
             (lambda (increment)
@@ -80,4 +78,40 @@ ok
 ok
 > (factorial 5)
 120
+```
+
+## test
+`$ cd test`
+
+`$ ../build/MyScheme`
+
+```shell
+> Welcome to MyScheme. Use Ctrl-C to exit.
+> (load "stdlib.scm") ; library 
+ok
+> (load "conventional_interfaces.scm") ; library
+ok
+> x
+(1 2 3 4 5)
+> x2
+(1 (2 (3 4)) 5)
+> x3
+((1 2 3) (2 3 4) (3 4 5))
+> T1
+(1 4 9 16 25)
+> T2
+(1 3 5)
+> T3
+15
+> T4
+120
+> T5
+(1 2 3 4 5)
+> T6
+(2 3 4 5 6 7)
+> T7
+(1 2 3 4 5)
+> (load "eight_queens_puzzle.scm") ; eight queens puzzle problem.
+ok
+> T7
 ```
