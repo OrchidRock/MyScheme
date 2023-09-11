@@ -6,8 +6,9 @@
 
 using namespace MyScheme;
 
-static std::list<Object*> gc_root_table; // for gc
 
 void* GC_malloc(size_t);
+void GC_push_root(Object* root);
+void GC_pop_root();
 
 #endif

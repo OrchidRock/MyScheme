@@ -23,10 +23,10 @@ public:
     ObjectType type;
     virtual void print(FILE* out = stdout) = 0;
     virtual ~Object() {};
-    
-    //void* operator new(size_t n) {
-    //    return GC_malloc(n); // gc
-    //}
+    /* 
+    void* operator new(size_t n) {
+        return GC_malloc(n); // gc
+    }*/
 };
 
 class boolean : public Object {

@@ -239,9 +239,16 @@ Object *primitive_proc_error::proc(Object *arguments) {
     exit(1);
 }
 
+pair* extend_environment(Object* paras, Object* argus, pair* env) {
+    //GC_push_root(env);
+    Frame* f = new Frame(paras, argus);
+    //GC_pop_root();
+    return (pair*)cons((Object*)f, (Object*)env);
+}
+
 pair* setup_environment() {
     pair* env;
-    env = extend_environment(new Frame(), the_empty_list);
+    env = extend_environment(the_empty_list, the_empty_list, the_empty_list);
     return env;
 }
 
@@ -344,11 +351,13 @@ void init() {
     the_global_environment = make_environment();
 
     // gc
-    gc_root_table.push_back(the_global_environment);
-    gc_root_table.push_back(True);
-    gc_root_table.push_back(False);
-    gc_root_table.push_back(the_empty_list);
-    gc_root_table.push_back(eof_object);
+    /*
+    GC_push_root(the_global_environment);
+    GC_push_root(True);
+    GC_push_root(False);
+    GC_push_root(the_empty_list);
+    GC_push_root(eof_object);
+    */
 }
 
 
@@ -359,16 +368,12 @@ void destory() {
 }
 
 Object *cons(Object *car, Object *cdr) {
+    //GC_push_root(car);
+    //GC_push_root(cdr);
     pair *obj = new pair(car, cdr);
-    /*
-    if (gc_root_table.back() == car || gc_root_table.back() == cdr) {
-        gc_root_table.pop_back();
-    }
-    if (gc_root_table.back() == car || gc_root_table.back() == cdr) {
-        gc_root_table.pop_back();
-    }
-    gc_root_table.push_back((Object*)obj);
-    */
+    //GC_pop_root();
+    //GC_pop_root();
+
     return obj;
 }
 
@@ -438,7 +443,7 @@ symbol* make_symbol(std::string buffer) {
     symbol_table[buffer] = new_symbol;
     
     // gc
-    //gc_root_table.push_back((Object*)new_symbol);
+    //GC_push_root((Object*)new_symbol);
     
     return new_symbol; 
 }
@@ -540,6 +545,8 @@ Object *read_pair(FILE *in) {
     ungetc(c, in);
 
     car_obj = read(in);
+    //GC_push_root(car_obj);
+
 
     eat_whitespace(in);
     
@@ -551,6 +558,9 @@ Object *read_pair(FILE *in) {
             exit(1);
         }
         cdr_obj = read(in);
+        
+        //GC_pop_root();
+        
         eat_whitespace(in);
         c = getc(in);
         if (c != ')') {
@@ -563,6 +573,7 @@ Object *read_pair(FILE *in) {
     else { /* read list */
         ungetc(c, in);
         cdr_obj = read_pair(in);        
+        //GC_pop_root();
         return cons(car_obj, cdr_obj);
     }
 }
@@ -965,6 +976,16 @@ Object *apply_operands(Object *arguments) {
     return prepare_apply_operands(((pair*)arguments)->cdr());
 }
 
+Object* make_compound_proc(Object* paras, Object* body, pair* env) {
+    //GC_push_root(paras);
+    //GC_push_root(body);
+    //GC_push_root(env);
+    Object* obj =  new compound_proc(paras, body, env);
+    //GC_pop_root();
+    //GC_pop_root();
+    //GC_pop_root();
+    return obj;
+}
 
 Object *eval_expression(Object *exp) {
     return ((pair*)exp)->car();
@@ -1025,7 +1046,7 @@ tailcall:
         goto tailcall;
     }
     else if (is_lambda(exp)) {
-        return new compound_proc(lambda_parameters(exp),
+        return make_compound_proc(lambda_parameters(exp),
                                  lambda_body(exp),
                                  env);
     }
@@ -1096,7 +1117,7 @@ tailcall:
             return ((Procedure*)procedure)->proc(arguments);
         }else if(procedure->type == ObjectType::COMPOUND_PROC) {
             compound_proc* cp = (compound_proc*)procedure;
-            env = extend_environment(new Frame(cp->parameters, arguments), cp->env);
+            env = extend_environment(cp->parameters, arguments, cp->env);
             exp = make_begin(cp->body);
             goto tailcall;
         }else {
@@ -1105,6 +1126,7 @@ tailcall:
     }
     else {
         fprintf(stderr, "cannot eval unknown expression type\n");
+        exp->print();
         exit(1);
     }
     fprintf(stderr, "eval illegal state\n");

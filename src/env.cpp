@@ -12,9 +12,6 @@ Frame* first_frame(pair* env) {
     return (Frame*)(env->car());
 }
 
-pair* extend_environment(Frame* f, pair* env) {
-    return new pair((Object*)f, (Object*)env);
-}
 
 Object* lookup_variable_value(symbol* var, pair* env) {
     Object* obj = nullptr;
